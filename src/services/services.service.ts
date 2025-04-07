@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CreateServiceDto } from './dto/create-service.dto';
-import { UpdateServiceDto } from './dto/update-service.dto';
 const axios = require('axios')
 require('dotenv').config()
 
@@ -21,7 +19,7 @@ async function generateAccessToken(){
 
 @Injectable()
 export class ServicesService {
-  async createOrder() {
+  async createOrder(userId: string) {
     const accessToken = await generateAccessToken();
     const response = await axios({
         url: process.env.PAYPAL_BASE_URL + "/v2/checkout/orders",
@@ -54,11 +52,12 @@ export class ServicesService {
                                 currency_code: "USD"
                             }
                         }
-                    }
+                    },
+                    custom_id: userId // Store the user ID here
                 }
             ],
             application_context: {
-                return_url: `${process.env.BASE_URL}/services/complete-order`,
+                return_url: `${process.env.BASE_URL}/services/complete-order/${userId}`,
                 cancel_url: `${process.env.BASE_URL}/services/cancel-order`,
                 shipping_prefernce: 'NO_SHIPPING',
                 user_action: 'PAY_NOW',
@@ -68,7 +67,7 @@ export class ServicesService {
     })
     return response.data.links.find((link: any) => link.rel === 'approve').href;
 }
- capturePayment = async (orderId) => {
+ capturePayment = async (orderId: string) => {
   const accessToken = await generateAccessToken();
   const response = await axios({
       url: process.env.PAYPAL_BASE_URL + `/v2/checkout/orders/${orderId}/capture`,
@@ -78,6 +77,57 @@ export class ServicesService {
           "Authorization": `Bearer ${accessToken}`,
       },
   })
+  console.log("captured!")
+
+    // Get the order details to extract the user ID
+   const orderDetails = await this.getOrderDetails(orderId, accessToken);
+   const userId = orderDetails.purchase_units[0].custom_id;
+
+  // Here you would update the user in your database
+  await this.updateUserPaymentStatus(userId);
+
   return response.data;
 }
+
+// Helper method to get order details
+private async getOrderDetails(orderId: string, accessToken: string) {
+    const response = await axios({
+        url: process.env.PAYPAL_BASE_URL + `/v2/checkout/orders/${orderId}`,
+        method: 'get',
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+        },
+    });
+    return response.data;
+  }
+
+// Method to update user payment status in your database
+private async updateUserPaymentStatus(userId: string) {
+    
+    // set user's lastPayment to current date
+    // make Patch request to http://localhost:3001/users/{userId}
+    
+try {
+  const response = await axios({
+    url: `${process.env.BASE_URL || 'http://localhost:3001'}/users/${userId}`,
+    method: 'patch',
+    data: {
+      lastPayment: new Date(),
+      isActive: true
+    }
+  });
+  
+  if (response.status !== 200) {
+    console.error(`Failed to update user ${userId}: ${response.statusText}`);
+  } else {
+    console.log('updated status successfuly')
+  }
+} catch (error) {
+  console.error(`Error updating user payment status: ${error.message}`);
 }
+
+    console.log(`Updated payment status for user: ${userId}`);
+}
+}
+

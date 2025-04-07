@@ -1,35 +1,45 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, Res, UseGuards } from '@nestjs/common';
 import { ServicesService } from './services.service';
-import { UpdateServiceDto } from './dto/update-service.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 require('dotenv').config()
 
 @Controller('services')
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
-  @Post()
-  async create(req, res) {
+  @UseGuards(JwtAuthGuard)
+  @Post('/pay/:id')
+  async create(@Req() req, @Res() res) {
     try {
-      const url = await this.servicesService.createOrder();
-      // res.redirect(url)
+      // Get the user ID from the url
+      const userId = req.params.id;
+      console.log(`userid at post: ${userId}`)
+      const url = await this.servicesService.createOrder(userId);
       console.log(url)
-      return url
+      return res.status(200).json({ url });
     } catch (error) {
       throw new Error(error);
     }
   }
-  @Get('/complete-order')
-  async complete(req, res) {
+  @Get('/complete-order/:id')
+  async complete(@Req() req, @Res() res) {
     try {
-      await this.servicesService.capturePayment(req.query.token);
+      const userId = req.params.id;
+      console.log(`userid at complete: ${userId}`)
+      console.log("successful")
+      // The token from PayPal is actually the order ID
+      const orderId = req.query.token;
+      await this.servicesService.capturePayment(orderId);
+      return res.status(200).send('Payment successful');
     } catch (error) {
       throw new Error(error);
     }
   }
   @Get('/cancel-order')
-  async cancel(req, res) {
+  async cancel(@Req() req, @Res() res) {
     try {
-      res.redirect('http://localhost:3001')
+      console.log("cancelled")
+      return res.status(200).send('Order cancelled');
     } catch (error) {
       throw new Error(error);
     }

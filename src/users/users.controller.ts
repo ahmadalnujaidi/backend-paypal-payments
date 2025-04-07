@@ -25,7 +25,6 @@ export class UsersController {
     return this.usersService.findById(+id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateData: Partial<User>): Promise<User> {
     return this.usersService.update(+id, updateData);
